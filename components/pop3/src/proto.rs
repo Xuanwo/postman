@@ -1123,7 +1123,13 @@ impl Response {
                     return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, content));
                 }
             },
-            Command::RETR => unimplemented!(),
+            Command::RETR => {
+                if vs.len() < 2 {
+                    return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, content));
+                }
+
+                Response::RETR(vs[1..vs.len() - 1].join(""))
+            }
             Command::DELE => {
                 if vs.len() != 1 {
                     return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, content));

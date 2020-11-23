@@ -3,6 +3,8 @@ name = "postman"
 version = "0.1.0"
 authors = ["Xuanwo <github@xuanwo.io>"]
 edition = "2018"
+description = "postman will distribute mails for you"
+license = "Apache-2.0"
 
 [dependencies]
 

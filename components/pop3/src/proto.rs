@@ -930,6 +930,7 @@ pub enum Response {
     RETR(String),
     STAT { count: usize, size: usize },
     RSET,
+    TOP(String),
     UIDL(BTreeMap<usize, String>),
     USER(String),
 
@@ -993,6 +994,11 @@ impl Response {
             }
             Response::STAT { count, size } => write!(&mut f, "+OK {} {}\r\n", count, size)?,
             Response::RSET => write!(&mut f, "+OK\r\n")?,
+            Response::TOP(v) => {
+                write!(&mut f, "+OK\r\n")?;
+                write!(&mut f, "{}", v)?;
+                write!(&mut f, ".\r\n")?
+            }
             Response::UIDL(v) => {
                 write!(&mut f, "+OK {} mails\r\n", v.len())?;
                 for (id, uid) in v.iter() {
@@ -1149,7 +1155,7 @@ impl Response {
                     return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, content));
                 }
 
-                Response::RETR(vs[0].strip_prefix("+OK ").unwrap().to_string())
+                Response::RSET
             }
             Command::QUIT => {
                 if vs.len() != 1 {
@@ -1158,7 +1164,13 @@ impl Response {
 
                 Response::QUIT
             }
-            Command::TOP => unimplemented!(),
+            Command::TOP => {
+                if vs.len() < 2 {
+                    return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, content));
+                }
+
+                Response::TOP(vs[1..vs.len() - 1].join(""))
+            }
             Command::APOP => unimplemented!(),
             Command::AUTH => {
                 if vs.len() != 1 {

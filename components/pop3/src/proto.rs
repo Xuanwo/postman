@@ -1177,11 +1177,17 @@ impl Response {
                 unimplemented!()
             }
             Command::CAPA => {
-                if vs.len() != 1 {
+                if vs.len() < 2 {
                     return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, content));
                 }
 
-                unimplemented!()
+                let mut caps = Vec::new();
+
+                for v in vs[1..vs.len() - 1].iter() {
+                    caps.push(v.to_string())
+                }
+
+                Response::CAPA(caps)
             }
         };
 

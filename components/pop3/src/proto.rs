@@ -2,6 +2,7 @@ use std::fmt::{Display, Formatter, Write};
 use std::str::FromStr;
 
 use anyhow::Result;
+use std::collections::BTreeMap;
 
 #[derive(Copy, Clone, Debug)]
 pub enum Command {
@@ -929,6 +930,7 @@ pub enum Response {
     RETR(String),
     STAT { count: usize, size: usize },
     RSET,
+    UIDL(BTreeMap<usize, String>),
     USER(String),
 
     ERR(String),
@@ -991,6 +993,13 @@ impl Response {
             }
             Response::STAT { count, size } => write!(&mut f, "+OK {} {}\r\n", count, size)?,
             Response::RSET => write!(&mut f, "+OK\r\n")?,
+            Response::UIDL(v) => {
+                write!(&mut f, "+OK {} mails\r\n", v.len())?;
+                for (id, uid) in v.iter() {
+                    write!(&mut f, "{} {}\r\n", id, uid)?;
+                }
+                write!(&mut f, ".\r\n")?
+            }
             Response::USER(v) => write!(&mut f, "+OK {}\r\n", v)?,
 
             Response::ERR(v) => write!(&mut f, "-ERR {}\r\n", v)?,
@@ -999,7 +1008,7 @@ impl Response {
         Ok(f)
     }
 
-    pub fn from_str(v: &str, cmd: Command) -> anyhow::Result<Response> {
+    pub fn from_str(v: &str, cmd: Command) -> Result<Response> {
         if !v.starts_with("-ERR") || !v.starts_with("+OK") {
             return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, v));
         }
@@ -1044,7 +1053,23 @@ impl Response {
                     size: usize::from_str(vs[2])?,
                 }
             }
-            Command::UIDL => unimplemented!(),
+            Command::UIDL => {
+                if vs.len() < 2 {
+                    return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, v));
+                }
+
+                let mut m = BTreeMap::new();
+                for v in vs[1..vs.len() - 1].iter() {
+                    let ids: Vec<&str> = v.splitn(2, " ").collect();
+                    if ids.len() != 2 {
+                        return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, v));
+                    }
+
+                    m.insert(usize::from_str(ids[0])?, ids[1].to_string());
+                }
+
+                Response::UIDL(m)
+            }
             Command::LIST => unimplemented!(),
             Command::RETR => unimplemented!(),
             Command::DELE => {

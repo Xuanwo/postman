@@ -919,6 +919,7 @@ impl Request {
 
 #[derive(Debug)]
 pub enum Response {
+    APOP,
     AUTH(AuthResponse),
     CAPA(Vec<String>),
     DELE,
@@ -956,6 +957,13 @@ impl Response {
         let mut f = String::new();
 
         match self {
+            Response::APOP | Response::DELE | Response::NOOP | Response::QUIT | Response::RSET => write!(&mut f, "+OK\r\n")?,
+            Response::GREET(v) | Response::PASS(v) | Response::USER(v) => write!(&mut f, "+OK {}\r\n", v)?,
+            Response::RETR(v) | Response::TOP(v) => {
+                write!(&mut f, "+OK\r\n")?;
+                write!(&mut f, "{}", v)?;
+                write!(&mut f, ".\r\n")?
+            }
             Response::AUTH(v) => match v {
                 AuthResponse::All(v) => {
                     write!(&mut f, "+OK {} auth methods\r\n", v.len())?;
@@ -972,8 +980,6 @@ impl Response {
                 }
                 write!(&mut f, ".\r\n")?
             }
-            Response::DELE => write!(&mut f, "+OK\r\n")?,
-            Response::GREET(v) => write!(&mut f, "+OK {}\r\n", v)?,
             Response::LIST(v) => match v {
                 ListResponse::All { count, messages } => {
                     write!(&mut f, "+OK {} messages\r\n", count)?;
@@ -984,21 +990,7 @@ impl Response {
                 }
                 ListResponse::Single(v) => write!(&mut f, "+OK {} {}\r\n", v.id, v.size)?,
             },
-            Response::NOOP => write!(&mut f, "+OK\r\n")?,
-            Response::PASS(v) => write!(&mut f, "+OK {}\r\n", v)?,
-            Response::QUIT => write!(&mut f, "+OK\r\n")?,
-            Response::RETR(v) => {
-                write!(&mut f, "+OK\r\n")?;
-                write!(&mut f, "{}", v)?;
-                write!(&mut f, ".\r\n")?
-            }
             Response::STAT { count, size } => write!(&mut f, "+OK {} {}\r\n", count, size)?,
-            Response::RSET => write!(&mut f, "+OK\r\n")?,
-            Response::TOP(v) => {
-                write!(&mut f, "+OK\r\n")?;
-                write!(&mut f, "{}", v)?;
-                write!(&mut f, ".\r\n")?
-            }
             Response::UIDL(v) => {
                 write!(&mut f, "+OK {} mails\r\n", v.len())?;
                 for (id, uid) in v.iter() {
@@ -1006,7 +998,6 @@ impl Response {
                 }
                 write!(&mut f, ".\r\n")?
             }
-            Response::USER(v) => write!(&mut f, "+OK {}\r\n", v)?,
 
             Response::ERR(v) => write!(&mut f, "-ERR {}\r\n", v)?,
         }
@@ -1171,7 +1162,13 @@ impl Response {
 
                 Response::TOP(vs[1..vs.len() - 1].join(""))
             }
-            Command::APOP => unimplemented!(),
+            Command::APOP => {
+                if vs.len() != 1 {
+                    return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, content));
+                }
+
+                Response::APOP
+            }
             Command::AUTH => {
                 if vs.len() != 1 {
                     return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, content));

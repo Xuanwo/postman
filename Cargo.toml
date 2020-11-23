@@ -1,0 +1,12 @@
+[package]
+name = "postman"
+version = "0.1.0"
+authors = ["Xuanwo <github@xuanwo.io>"]
+edition = "2018"
+
+[dependencies]
+
+[workspace]
+members = [
+    "components/pop3"
+]

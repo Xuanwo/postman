@@ -1008,44 +1008,49 @@ impl Response {
         Ok(f)
     }
 
-    pub fn from_str(v: &str, cmd: Command) -> Result<Response> {
-        if !v.starts_with("-ERR") || !v.starts_with("+OK") {
-            return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, v));
+    pub fn from_str(content: &str, req: &Request) -> Result<Response> {
+        if !content.starts_with("-ERR") || !content.starts_with("+OK") {
+            return Err(anyhow::anyhow!(
+                "invalid response for {:?}: {}",
+                req,
+                content
+            ));
         }
 
-        if v.starts_with("-ERR") {
-            let v = v.strip_prefix("-ERR ").unwrap();
+        if content.starts_with("-ERR") {
+            let v = content.strip_prefix("-ERR ").unwrap();
             let v = v.strip_suffix("\r\n").unwrap();
 
             return Ok(Response::ERR(v.to_string()));
         }
 
-        let vs: Vec<&str> = v.split("\r\n").filter(|s| !s.is_empty()).collect();
+        let vs: Vec<&str> = content.split("\r\n").filter(|s| !s.is_empty()).collect();
 
+        let cmd = Command::from(req);
         let resp = match cmd {
             Command::USER => {
                 if vs.len() != 1 {
-                    return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, v));
+                    return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, content));
                 }
 
                 Response::USER(vs[0].strip_prefix("+OK ").unwrap().to_string())
             }
             Command::PASS => {
                 if vs.len() != 1 {
-                    return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, v));
+                    return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, content));
                 }
 
                 Response::PASS(vs[0].strip_prefix("+OK ").unwrap().to_string())
             }
             Command::STAT => {
                 if vs.len() != 1 {
-                    return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, v));
+                    return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, content));
                 }
 
                 let vs: Vec<&str> = vs[0].split(" ").collect();
 
                 if vs.len() != 3 {
-                    return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, v));
+                    return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, content));
                 }
 
                 Response::STAT {
@@ -1055,7 +1060,7 @@ impl Response {
             }
             Command::UIDL => {
                 if vs.len() < 2 {
-                    return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, v));
+                    return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, content));
                 }
 
                 let mut m = BTreeMap::new();
@@ -1070,32 +1075,79 @@ impl Response {
 
                 Response::UIDL(m)
             }
-            Command::LIST => unimplemented!(),
+            Command::LIST => match req {
+                Request::LIST(v) => match v {
+                    None => {
+                        if vs.len() < 2 {
+                            return Err(anyhow::anyhow!(
+                                "invalid response for {}: {}",
+                                cmd,
+                                content
+                            ));
+                        }
+                        let mut messages = Vec::new();
+
+                        for v in vs[1..vs.len() - 1].iter() {
+                            let ids: Vec<&str> = v.splitn(2, " ").collect();
+                            if ids.len() != 2 {
+                                return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, v));
+                            }
+
+                            messages.push(MessageMeta {
+                                id: usize::from_str(ids[0])?,
+                                size: usize::from_str(ids[1])?,
+                            });
+                        }
+
+                        Response::LIST(ListResponse::All {
+                            count: messages.len(),
+                            messages,
+                        })
+                    }
+                    Some(_) => {
+                        if vs.len() != 3 {
+                            return Err(anyhow::anyhow!(
+                                "invalid response for {}: {}",
+                                cmd,
+                                content
+                            ));
+                        }
+
+                        Response::LIST(ListResponse::Single(MessageMeta {
+                            id: usize::from_str(vs[1])?,
+                            size: usize::from_str(vs[2])?,
+                        }))
+                    }
+                },
+                _ => {
+                    return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, content));
+                }
+            },
             Command::RETR => unimplemented!(),
             Command::DELE => {
                 if vs.len() != 1 {
-                    return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, v));
+                    return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, content));
                 }
 
                 Response::DELE
             }
             Command::NOOP => {
                 if vs.len() != 1 {
-                    return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, v));
+                    return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, content));
                 }
 
                 Response::NOOP
             }
             Command::RSET => {
                 if vs.len() != 1 {
-                    return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, v));
+                    return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, content));
                 }
 
                 Response::RETR(vs[0].strip_prefix("+OK ").unwrap().to_string())
             }
             Command::QUIT => {
                 if vs.len() != 1 {
-                    return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, v));
+                    return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, content));
                 }
 
                 Response::QUIT
@@ -1104,14 +1156,14 @@ impl Response {
             Command::APOP => unimplemented!(),
             Command::AUTH => {
                 if vs.len() != 1 {
-                    return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, v));
+                    return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, content));
                 }
 
                 unimplemented!()
             }
             Command::CAPA => {
                 if vs.len() != 1 {
-                    return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, v));
+                    return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, content));
                 }
 
                 unimplemented!()

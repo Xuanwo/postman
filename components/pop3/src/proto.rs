@@ -1,6 +1,8 @@
 use std::fmt::{Display, Formatter, Write};
 use std::str::FromStr;
 
+use anyhow::Result;
+
 #[derive(Copy, Clone, Debug)]
 pub enum Command {
     /// APOP is used to do digest auth
@@ -686,35 +688,68 @@ impl Display for Command {
     }
 }
 
+impl From<&Request> for Command {
+    fn from(v: &Request) -> Self {
+        match v {
+            Request::APOP { .. } => Command::APOP,
+            Request::AUTH(_) => Command::AUTH,
+            Request::CAPA => Command::CAPA,
+            Request::DELE(_) => Command::DELE,
+            Request::LIST(_) => Command::LIST,
+            Request::NOOP => Command::NOOP,
+            Request::PASS(_) => Command::PASS,
+            Request::QUIT => Command::QUIT,
+            Request::RETR(_) => Command::RETR,
+            Request::RSET => Command::RSET,
+            Request::STAT => Command::STAT,
+            Request::TOP { .. } => Command::TOP,
+            Request::UIDL(_) => Command::UIDL,
+            Request::USER(_) => Command::USER,
+            _ => panic!("invalid command for request: {:?}", v),
+        }
+    }
+}
+
+impl From<&Response> for Command {
+    fn from(v: &Response) -> Self {
+        match v {
+            Response::AUTH(_) => Command::AUTH,
+            Response::CAPA(_) => Command::CAPA,
+            Response::DELE => Command::DELE,
+            Response::LIST(_) => Command::LIST,
+            Response::NOOP => Command::NOOP,
+            Response::PASS(_) => Command::PASS,
+            Response::QUIT => Command::QUIT,
+            Response::RETR(_) => Command::RETR,
+            Response::STAT { .. } => Command::STAT,
+            Response::RSET => Command::RSET,
+            Response::USER(_) => Command::USER,
+            // GREET and ERR doesn't have related commend.
+            _ => panic!("invalid command for response: {:?}", v),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Request {
-    // USER {}
-    User(String),
-    // PASS {}
-    Pass(String),
-    // STAT
-    Stat,
-    // UIDL / UIDL {}
-    Uidl(Option<usize>),
-    // LIST / LIST {}
-    List(Option<usize>),
-    // RETR {}
-    Retr(usize),
-    // DELE {}
-    Dele(usize),
-    // NOOP
-    Noop,
-    // RETR
-    Rset,
-    // QUIT
-    Quit,
-    // AUTH {}
-    Auth(Option<String>),
-    Capa,
+    APOP { username: String, digest: String },
+    AUTH(Option<String>),
+    CAPA,
+    DELE(usize),
+    LIST(Option<usize>),
+    NOOP,
+    PASS(String),
+    QUIT,
+    RETR(usize),
+    RSET,
+    STAT,
+    TOP { id: usize, lines: usize },
+    UIDL(Option<usize>),
+    USER(String),
 }
 
 impl Request {
-    pub fn from_str(v: &str) -> anyhow::Result<Request> {
+    pub fn from_str(v: &str) -> Result<Request> {
         let v = v.strip_suffix("\r\n").unwrap();
 
         let vs: Vec<&str> = v.split(" ").filter(|s| !s.is_empty()).collect();
@@ -726,39 +761,39 @@ impl Request {
                     return Err(anyhow::anyhow!("invalid request for {}: {}", cmd, v));
                 }
 
-                Request::User(vs[1].to_string())
+                Request::USER(vs[1].to_string())
             }
             Command::PASS => {
                 if vs.len() != 2 {
                     return Err(anyhow::anyhow!("invalid request for {}: {}", cmd, v));
                 }
 
-                Request::Pass(vs[1].to_string())
+                Request::PASS(vs[1].to_string())
             }
             Command::STAT => {
                 if vs.len() != 1 {
                     return Err(anyhow::anyhow!("invalid request for {}: {}", cmd, v));
                 }
 
-                Request::Stat
+                Request::STAT
             }
             Command::UIDL => match vs.len() {
-                1 => Request::Uidl(None),
+                1 => Request::UIDL(None),
                 2 => {
                     let msg = usize::from_str(vs[1])?;
 
-                    Request::Uidl(Some(msg))
+                    Request::UIDL(Some(msg))
                 }
                 _ => {
                     return Err(anyhow::anyhow!("invalid request for {}: {}", cmd, v));
                 }
             },
             Command::LIST => match vs.len() {
-                1 => Request::List(None),
+                1 => Request::LIST(None),
                 2 => {
                     let msg = usize::from_str(vs[1])?;
 
-                    Request::List(Some(msg))
+                    Request::LIST(Some(msg))
                 }
                 _ => {
                     return Err(anyhow::anyhow!("invalid request for {}: {}", cmd, v));
@@ -771,7 +806,7 @@ impl Request {
 
                 let msg = usize::from_str(vs[1])?;
 
-                Request::Retr(msg)
+                Request::RETR(msg)
             }
             Command::DELE => {
                 if vs.len() != 2 {
@@ -780,69 +815,132 @@ impl Request {
 
                 let msg = usize::from_str(vs[1])?;
 
-                Request::Dele(msg)
+                Request::DELE(msg)
             }
             Command::NOOP => {
                 if vs.len() != 1 {
                     return Err(anyhow::anyhow!("invalid request for {}: {}", cmd, v));
                 }
 
-                Request::Noop
+                Request::NOOP
             }
             Command::RSET => {
                 if vs.len() != 1 {
                     return Err(anyhow::anyhow!("invalid request for {}: {}", cmd, v));
                 }
 
-                Request::Rset
+                Request::RSET
             }
             Command::QUIT => {
                 if vs.len() != 1 {
                     return Err(anyhow::anyhow!("invalid request for {}: {}", cmd, v));
                 }
 
-                Request::Quit
+                Request::QUIT
             }
-            Command::TOP => unimplemented!(),
-            Command::APOP => unimplemented!(),
+            Command::TOP => {
+                if vs.len() != 3 {
+                    return Err(anyhow::anyhow!("invalid request for {}: {}", cmd, v));
+                }
+
+                let id = usize::from_str(vs[1])?;
+                let lines = usize::from_str(vs[2])?;
+
+                Request::TOP { id, lines }
+            }
+            Command::APOP => {
+                if vs.len() != 3 {
+                    return Err(anyhow::anyhow!("invalid request for {}: {}", cmd, v));
+                }
+
+                Request::APOP {
+                    username: vs[1].to_string(),
+                    digest: vs[2].to_string(),
+                }
+            }
             Command::AUTH => match vs.len() {
-                1 => Request::Auth(None),
-                2 => Request::Auth(Some(vs[1].to_string())),
+                1 => Request::AUTH(None),
+                2 => Request::AUTH(Some(vs[1].to_string())),
                 _ => {
                     return Err(anyhow::anyhow!("invalid request for {}: {}", cmd, v));
                 }
             },
-            Command::CAPA => Request::Capa,
+            Command::CAPA => {
+                if vs.len() != 1 {
+                    return Err(anyhow::anyhow!("invalid request for {}: {}", cmd, v));
+                }
+
+                Request::CAPA
+            }
         };
 
         Ok(req)
+    }
+
+    pub fn to_string(&self) -> Result<String> {
+        let mut f = String::new();
+
+        match self {
+            Request::CAPA | Request::NOOP | Request::QUIT | Request::RSET | Request::STAT => {
+                write!(&mut f, "{}\r\n", Command::from(self))?
+            }
+            Request::DELE(v) => write!(&mut f, "{} {}\r\n", Command::from(self), v)?,
+            Request::PASS(v) => write!(&mut f, "{} {}\r\n", Command::from(self), v)?,
+            Request::RETR(v) => write!(&mut f, "{} {}\r\n", Command::from(self), v)?,
+            Request::USER(v) => write!(&mut f, "{} {}\r\n", Command::from(self), v)?,
+            Request::AUTH(v) => match v {
+                None => write!(&mut f, "{}\r\n", Command::from(self))?,
+                Some(v) => write!(&mut f, "{} {}\r\n", Command::from(self), v)?,
+            },
+            Request::LIST(v) => match v {
+                None => write!(&mut f, "{}\r\n", Command::from(self))?,
+                Some(v) => write!(&mut f, "{} {}\r\n", Command::from(self), v)?,
+            },
+            Request::UIDL(v) => match v {
+                None => write!(&mut f, "{}\r\n", Command::from(self))?,
+                Some(v) => write!(&mut f, "{} {}\r\n", Command::from(self), v)?,
+            },
+            Request::APOP { username, digest } => write!(
+                &mut f,
+                "{} {} {}\r\n",
+                Command::from(self),
+                username,
+                digest
+            )?,
+            Request::TOP { id, lines } => {
+                write!(&mut f, "{} {} {}\r\n", Command::from(self), id, lines)?
+            }
+        }
+
+        Ok(f)
     }
 }
 
 #[derive(Debug)]
 pub enum Response {
-    Greet(String),
-    User(String),
-    Pass(String),
-    Stat { count: usize, size: usize },
-    List(ListResponse),
-    Retr(String),
-    Dele,
-    Noop,
-    Rset,
-    Quit,
-    Auth(AuthResponse),
-    Err(String),
-    Capa(Vec<String>),
+    AUTH(AuthResponse),
+    CAPA(Vec<String>),
+    DELE,
+    GREET(String),
+    LIST(ListResponse),
+    NOOP,
+    PASS(String),
+    QUIT,
+    RETR(String),
+    STAT { count: usize, size: usize },
+    RSET,
+    USER(String),
+
+    ERR(String),
 }
 
 #[derive(Debug)]
 pub enum ListResponse {
+    Single(MessageMeta),
     All {
         count: usize,
         messages: Vec<MessageMeta>,
     },
-    Single(MessageMeta),
 }
 
 #[derive(Debug)]
@@ -851,15 +949,29 @@ pub enum AuthResponse {
 }
 
 impl Response {
-    pub fn to_string(&self) -> anyhow::Result<String> {
+    pub fn to_string(&self) -> Result<String> {
         let mut f = String::new();
 
         match self {
-            Response::Greet(v) => write!(&mut f, "+OK {}\r\n", v)?,
-            Response::User(v) => write!(&mut f, "+OK {}\r\n", v)?,
-            Response::Pass(v) => write!(&mut f, "+OK {}\r\n", v)?,
-            Response::Stat { count, size } => write!(&mut f, "+OK {} {}\r\n", count, size)?,
-            Response::List(v) => match v {
+            Response::AUTH(v) => match v {
+                AuthResponse::All(v) => {
+                    write!(&mut f, "+OK {} auth methods\r\n", v.len())?;
+                    for v in v.iter() {
+                        write!(&mut f, "{}\r\n", v)?;
+                    }
+                    write!(&mut f, ".\r\n")?
+                }
+            },
+            Response::CAPA(v) => {
+                write!(&mut f, "+OK Capability list follows\r\n")?;
+                for v in v.iter() {
+                    write!(&mut f, "{}\r\n", v)?;
+                }
+                write!(&mut f, ".\r\n")?
+            }
+            Response::DELE => write!(&mut f, "+OK\r\n")?,
+            Response::GREET(v) => write!(&mut f, "+OK {}\r\n", v)?,
+            Response::LIST(v) => match v {
                 ListResponse::All { count, messages } => {
                     write!(&mut f, "+OK {} messages\r\n", count)?;
                     for v in messages.iter() {
@@ -869,32 +981,19 @@ impl Response {
                 }
                 ListResponse::Single(v) => write!(&mut f, "+OK {} {}\r\n", v.id, v.size)?,
             },
-            Response::Retr(v) => {
+            Response::NOOP => write!(&mut f, "+OK\r\n")?,
+            Response::PASS(v) => write!(&mut f, "+OK {}\r\n", v)?,
+            Response::QUIT => write!(&mut f, "+OK\r\n")?,
+            Response::RETR(v) => {
                 write!(&mut f, "+OK\r\n")?;
                 write!(&mut f, "{}", v)?;
                 write!(&mut f, ".\r\n")?
             }
-            Response::Dele => write!(&mut f, "+OK\r\n")?,
-            Response::Noop => write!(&mut f, "+OK\r\n")?,
-            Response::Rset => write!(&mut f, "+OK\r\n")?,
-            Response::Quit => write!(&mut f, "+OK\r\n")?,
-            Response::Auth(v) => match v {
-                AuthResponse::All(v) => {
-                    write!(&mut f, "+OK {} auth methods\r\n", v.len())?;
-                    for v in v.iter() {
-                        write!(&mut f, "{}\r\n", v)?;
-                    }
-                    write!(&mut f, ".\r\n")?
-                }
-            },
-            Response::Capa(v) => {
-                write!(&mut f, "+OK Capability list follows\r\n")?;
-                for v in v.iter() {
-                    write!(&mut f, "{}\r\n", v)?;
-                }
-                write!(&mut f, ".\r\n")?
-            }
-            Response::Err(v) => write!(&mut f, "-ERR {}\r\n", v)?,
+            Response::STAT { count, size } => write!(&mut f, "+OK {} {}\r\n", count, size)?,
+            Response::RSET => write!(&mut f, "+OK\r\n")?,
+            Response::USER(v) => write!(&mut f, "+OK {}\r\n", v)?,
+
+            Response::ERR(v) => write!(&mut f, "-ERR {}\r\n", v)?,
         }
 
         Ok(f)
@@ -909,7 +1008,7 @@ impl Response {
             let v = v.strip_prefix("-ERR ").unwrap();
             let v = v.strip_suffix("\r\n").unwrap();
 
-            return Ok(Response::Err(v.to_string()));
+            return Ok(Response::ERR(v.to_string()));
         }
 
         let vs: Vec<&str> = v.split("\r\n").filter(|s| !s.is_empty()).collect();
@@ -920,14 +1019,14 @@ impl Response {
                     return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, v));
                 }
 
-                Response::User(vs[0].strip_prefix("+OK ").unwrap().to_string())
+                Response::USER(vs[0].strip_prefix("+OK ").unwrap().to_string())
             }
             Command::PASS => {
                 if vs.len() != 1 {
                     return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, v));
                 }
 
-                Response::Pass(vs[0].strip_prefix("+OK ").unwrap().to_string())
+                Response::PASS(vs[0].strip_prefix("+OK ").unwrap().to_string())
             }
             Command::STAT => {
                 if vs.len() != 1 {
@@ -940,7 +1039,7 @@ impl Response {
                     return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, v));
                 }
 
-                Response::Stat {
+                Response::STAT {
                     count: usize::from_str(vs[1])?,
                     size: usize::from_str(vs[2])?,
                 }
@@ -953,28 +1052,28 @@ impl Response {
                     return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, v));
                 }
 
-                Response::Dele
+                Response::DELE
             }
             Command::NOOP => {
                 if vs.len() != 1 {
                     return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, v));
                 }
 
-                Response::Noop
+                Response::NOOP
             }
             Command::RSET => {
                 if vs.len() != 1 {
                     return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, v));
                 }
 
-                Response::Retr(vs[0].strip_prefix("+OK ").unwrap().to_string())
+                Response::RETR(vs[0].strip_prefix("+OK ").unwrap().to_string())
             }
             Command::QUIT => {
                 if vs.len() != 1 {
                     return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, v));
                 }
 
-                Response::Quit
+                Response::QUIT
             }
             Command::TOP => unimplemented!(),
             Command::APOP => unimplemented!(),

@@ -168,7 +168,7 @@ impl Handler {
     async fn run(&mut self) -> crate::Result<()> {
         let (mut r, mut w) = self.connection.split();
 
-        let greet = Response::Greet("Welcome to postman pop3 server".to_string());
+        let greet = Response::GREET("Welcome to postman pop3 server".to_string());
         info!("S: {:?}", &greet);
         w.write(greet.to_string()?.as_bytes()).await?;
 
@@ -183,28 +183,30 @@ impl Handler {
             info!("C: {:?}", &req);
 
             let resp = match req {
-                Request::User(v) => Response::User("".to_string()),
-                Request::Pass(_) => Response::Pass("".to_string()),
-                Request::Stat => Response::Stat { count: 10, size: 8 },
-                Request::Uidl(_) => unimplemented!(),
-                Request::List(_) => unimplemented!(),
-                Request::Retr(_) => unimplemented!(),
-                Request::Dele(_) => unimplemented!(),
-                Request::Noop => unimplemented!(),
-                Request::Rset => unimplemented!(),
-                Request::Quit => unimplemented!(),
-                Request::Auth(v) => match v {
-                    None => Response::Auth(AuthResponse::All(Vec::new())),
+                Request::USER(v) => Response::USER("".to_string()),
+                Request::PASS(_) => Response::PASS("".to_string()),
+                Request::STAT => Response::STAT { count: 10, size: 8 },
+                Request::UIDL(_) => unimplemented!(),
+                Request::LIST(_) => unimplemented!(),
+                Request::RETR(_) => unimplemented!(),
+                Request::DELE(_) => unimplemented!(),
+                Request::NOOP => unimplemented!(),
+                Request::RSET => unimplemented!(),
+                Request::QUIT => unimplemented!(),
+                Request::AUTH(v) => match v {
+                    None => Response::AUTH(AuthResponse::All(Vec::new())),
                     Some(auth) => unimplemented!(),
                 },
-                Request::Capa => {
+                Request::CAPA => {
                     let mut caps = Vec::new();
                     caps.push(String::from("TOP"));
                     caps.push(String::from("USER"));
                     caps.push(String::from("UIDL"));
 
-                    Response::Capa(caps)
+                    Response::CAPA(caps)
                 }
+                Request::TOP { id, lines } => unimplemented!(),
+                Request::APOP { username, digest } => unimplemented!(),
             };
 
             info!("S: {:?}", &resp);

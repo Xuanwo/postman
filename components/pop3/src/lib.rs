@@ -42,9 +42,8 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, mpsc, Semaphore};
 use tokio::time::{self, Duration};
 
-use crate::proto::AuthResponse;
 use crate::shutdown::Shutdown;
-use proto::{Command, Request, Response};
+pub use proto::*;
 
 mod proto;
 mod shutdown;

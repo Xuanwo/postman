@@ -74,15 +74,19 @@ pub enum Command {
     ///
     /// # Syntax
     ///
+    /// ```text
     /// S: +OK POP3 server ready <process-id.clock@hostname>
     /// C: APOP <username> <digest of "<process-id.clock@hostname><password>">
     /// S: +OK [msg]
+    /// ```
     ///
     /// # Examples
     ///
+    /// ```text
     /// S: +OK POP3 server ready <1896.697170952@dbc.mtview.ca.us>
     /// C: APOP mrose c4c9334bac560ecc979e58001b3e22fb
     /// S: +OK maildrop has 1 message (369 octets)
+    /// ```
     ///
     ///  In this example, the shared  secret  is  the  string  `tan-
     ///  staaf'.  Hence, the MD5 algorithm is applied to the string
@@ -159,20 +163,25 @@ pub enum Command {
     ///
     /// ## List supported auth methods
     ///
+    /// ```text
     /// C: AUTH
     /// S: +OK <msg>
     /// S: <auth>
     /// S: .
+    /// ```
     ///
     /// ## Check and start a specific auth
     ///
+    /// ```text
     /// C: AUTH <auth>
     /// S: <challenge>
     /// C: <response>
     /// S: +OK <msg>
+    /// ```
     ///
     /// # Examples
     ///
+    /// ```text
     /// S: +OK POP3 server ready
     /// C: AUTH KERBEROS_V4
     /// S: + AmFYig==
@@ -182,6 +191,7 @@ pub enum Command {
     /// S: + or//EoAADZI=
     /// C: DiAF5A4gA+oOIALuBkAAmw==
     /// S: +OK Kerberos V4 authentication successful
+    /// ```
     AUTH,
     /// CAPA returns a list of capabilities supported by the POP3 server
     ///
@@ -216,13 +226,16 @@ pub enum Command {
     ///
     /// # Syntax
     ///
+    /// ```text
     /// C: CAPA
     /// S: +OK <msg>
     /// S: <capability>
     /// S: .
+    /// ```
     ///
     /// # Examples
     ///
+    /// ```text
     /// C: CAPA
     /// S: +OK Capability list follows
     /// S: TOP
@@ -235,6 +248,7 @@ pub enum Command {
     /// S: UIDL
     /// S: IMPLEMENTATION Shlemazle-Plotz-v302
     /// S: .
+    /// ```
     CAPA,
     /// DELE will delete a mail from maildrop
     ///
@@ -252,16 +266,22 @@ pub enum Command {
     ///
     /// # Syntax
     ///
+    /// ```text
     /// C: DELE <id>
     /// S: +OK [msg]
+    /// ```
     ///
     /// # Examples
     ///
+    /// ```text
     /// C: DELE 1
     /// S: +OK message 1 deleted
+    /// ```
     ///
+    /// ```text
     /// C: DELE 2
     /// S: -ERR message 2 already deleted
+    /// ```
     DELE,
     /// LIST will list maildrop mails
     ///
@@ -311,29 +331,39 @@ pub enum Command {
     ///
     /// ## List all mails
     ///
+    /// ```text
     /// C: LIST
     /// S: +OK [msg]
     /// S: <id> <size>
     /// S: .
+    /// ```
     ///
     /// ## List single mail
     ///
+    /// ```text
     /// C: LIST <id>
     /// S: +OK <id> <size>
+    /// ```
     ///
     /// # Examples
     ///
+    /// ```text
     /// C: LIST
     /// S: +OK 2 messages (320 octets)
     /// S: 1 120
     /// S: 2 200
     /// S: .
+    /// ```
     ///
+    /// ```text
     /// C: LIST 2
     /// S: +OK 2 200
+    /// ```
     ///
+    /// ```text
     /// C: LIST 3
     /// S: -ERR no such message, only 2 messages in maildrop
+    /// ```
     LIST,
     /// NOOP will do nothing, used to keep heartbeat.
     ///
@@ -347,25 +377,33 @@ pub enum Command {
     ///
     /// # Syntax
     ///
+    /// ```text
     /// C: NOOP
     /// S: +OK
+    /// ```
     ///
     /// # Examples
     ///
+    /// ```text
     /// C: NOOP
     /// S: +OK
+    /// ```
     NOOP,
     /// QUIT will terminate this connection by client.
     ///
     /// # Syntax
     ///
+    /// ```text
     /// C: QUIT
     /// S: +OK [msg]
+    /// ```
     ///
     /// # Examples
     ///
+    /// ```text
     /// C: QUIT
     /// S: +OK dewey POP3 server signing off (maildrop empty)
+    /// ```
     QUIT,
     /// PASS is used to send password.
     ///
@@ -386,20 +424,26 @@ pub enum Command {
     ///
     /// # Syntax
     ///
+    /// ```text
     /// C: PASS <passowrd>
     /// S: +OK [msg]
+    /// ```
     ///
     /// # Examples
     ///
+    /// ```text
     /// C: USER mrose
     /// S: +OK mrose is a real hoopy frood
     /// C: PASS secret
     /// S: -ERR maildrop already locked
+    /// ```
     ///
+    /// ```text
     /// C: USER mrose
     /// S: +OK mrose is a real hoopy frood
     /// C: PASS secret
     /// S: +OK mrose's maildrop has 2 messages (320 octets)
+    /// ```
     PASS,
     /// RETR will be used to retrieve a mail
     ///
@@ -417,17 +461,21 @@ pub enum Command {
     ///
     /// # Syntax
     ///
+    /// ```text
     /// C: RETR <id>
     /// S: +OK [msg]
     /// S: <the POP3 server sends the entire message here>
     /// S: .
+    /// ```
     ///
     /// # Examples
     ///
+    /// ```text
     /// C: RETR 1
     /// S: +OK 120 octets
     /// S: <the POP3 server sends the entire message here>
     /// S: .
+    /// ```
     RETR,
     /// RSET will reset the connection to initial state.
     ///
@@ -443,13 +491,17 @@ pub enum Command {
     ///
     /// # Syntax
     ///
+    /// ```text
     /// C: RSET
     /// S: +OK [msg]
+    /// ```
     ///
     /// # Examples
     ///
+    /// ```text
     /// C: RSET
     /// S: +OK maildrop has 2 messages (320 octets)
+    /// ```
     RSET,
     /// STAT will show the stat of maildrop.
     ///
@@ -484,13 +536,17 @@ pub enum Command {
     ///
     /// # Syntax
     ///
+    /// ```text
     /// C: STAT
     /// S: OK <count> <size>
+    /// ```
     ///
     /// # Examples
     ///
+    /// ```text
     /// C: STAT
     /// S: +OK 2 320
+    /// ```
     STAT,
     /// TOP will used to send top lines of messages.
     ///
@@ -514,24 +570,30 @@ pub enum Command {
     ///
     /// # Syntax
     ///
+    /// ```text
     /// C: TOP <id> <lines>
     /// S: +OK
     /// S: <the POP3 server sends the headers of the
     ///    message, a blank line, and the first <lines>
     ///    of the body of the message>
     /// S: .
+    /// ```
     ///
     /// # Examples
     ///
+    /// ```text
     /// C: TOP 1 10
     /// S: +OK
     /// S: <the POP3 server sends the headers of the
     ///    message, a blank line, and the first 10 lines
     ///    of the body of the message>
     /// S: .
+    /// ```
     ///
+    /// ```text
     /// C: TOP 100 3
     /// S: -ERR no such message
+    /// ```
     TOP,
     /// UIDL will used to do "unique-id listing".
     ///
@@ -578,29 +640,39 @@ pub enum Command {
     ///
     /// ## List all mails with unique id
     ///
+    /// ```text
     /// C: UIDL
     /// S: +OK
     /// S: <id> <unique-id>
     /// S: .
+    /// ```
     ///
     /// ## List single mail with unique id
     ///
+    /// ```text
     /// C: UIDL <id>
     /// S: +OK <id> <unique-id>
+    /// ```
     ///
     /// # Examples
     ///
+    /// ```text
     /// C: UIDL
     /// S: +OK
     /// S: 1 whqtswO00WBw418f9t5JxYwZ
     /// S: 2 QhdPYR:00WBw1Ph7x7
     /// S: .
+    /// ```
     ///
+    /// ```text
     /// C: UIDL 2
     /// S: +OK 2 QhdPYR:00WBw1Ph7x7
+    /// ```
     ///
+    /// ```text
     /// C: UIDL 3
     /// S: -ERR no such message, only 2 messages in maildrop
+    /// ```
     UIDL,
     /// USER is used to send user name
     ///
@@ -629,16 +701,22 @@ pub enum Command {
     ///
     /// # Syntax
     ///
+    /// ```text
     /// C: USER <username>
     /// S: +OK [msg]
+    /// ```
     ///
     /// # Examples
     ///
+    /// ```text
     /// C: USER frated
     /// S: -ERR sorry, no mailbox for frated here
+    /// ```
     ///
+    /// ```text
     /// C: USER mrose
     /// S: +OK mrose is a real hoopy frood
+    /// ```
     USER,
 }
 
@@ -957,8 +1035,12 @@ impl Response {
         let mut f = String::new();
 
         match self {
-            Response::APOP | Response::DELE | Response::NOOP | Response::QUIT | Response::RSET => write!(&mut f, "+OK\r\n")?,
-            Response::GREET(v) | Response::PASS(v) | Response::USER(v) => write!(&mut f, "+OK {}\r\n", v)?,
+            Response::APOP | Response::DELE | Response::NOOP | Response::QUIT | Response::RSET => {
+                write!(&mut f, "+OK\r\n")?
+            }
+            Response::GREET(v) | Response::PASS(v) | Response::USER(v) => {
+                write!(&mut f, "+OK {}\r\n", v)?
+            }
             Response::RETR(v) | Response::TOP(v) => {
                 write!(&mut f, "+OK\r\n")?;
                 write!(&mut f, "{}", v)?;

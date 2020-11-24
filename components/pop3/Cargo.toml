@@ -1,6 +1,6 @@
 [package]
 name = "postman-pop3"
-version = "0.1.1-alpha.2"
+version = "0.2.0"
 authors = ["Xuanwo <github@xuanwo.io>"]
 edition = "2018"
 description = "postman-pop3 is the pop3 proto support for postman"
@@ -13,4 +13,3 @@ env_logger = "0.8.2"
 log = "0.4.11"
 serde = { version = "1.0", features = ["derive"] }
 sled = "0.34.6"
-tokio = { version = "0.3.4", features = ["full"] }

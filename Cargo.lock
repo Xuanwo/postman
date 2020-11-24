@@ -319,7 +319,7 @@ dependencies = [
 
 [[package]]
 name = "postman-pop3"
-version = "0.1.1-alpha.2"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "bincode",
@@ -327,7 +327,6 @@ dependencies = [
  "log",
  "serde",
  "sled",
- "tokio",
 ]
 
 [[package]]

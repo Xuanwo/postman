@@ -1,0 +1,18 @@
+database_dir = ""
+data_dir = ""
+
+[[downstream]]
+protocol = "pop3"
+addr = "0.0.0.0:456"
+auth_type = ""
+username = ""
+password = ""
+
+[[upstream]]
+protocol = "pop3"
+name = "qq"
+addr = "mail.qq.com:467"
+auth_type = ""
+username = "3150754320@qq.com"
+password = "xxxx"
+

@@ -4,6 +4,7 @@ use std::str::FromStr;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use sled::IVec;
 
 #[derive(Copy, Clone, Debug)]
 pub enum Command {
@@ -1313,8 +1314,22 @@ pub struct MessageMeta {
     pub next_status: Option<MessageStatus>,
 }
 
+impl From<sled::IVec> for MessageMeta {
+    fn from(v: IVec) -> Self {
+        bincode::deserialize(v.as_ref()).expect("deserialize MessageMeta failed")
+    }
+}
+
+impl Into<sled::IVec> for MessageMeta {
+    fn into(self) -> IVec {
+        IVec::from(bincode::serialize(&self).expect("serialize MessageMeta failed"))
+    }
+}
+
 #[derive(Debug, Copy, Clone, Default, Serialize, Deserialize)]
 pub struct MessageStatus {
-    pub read: bool,
+    // Whether or not this message has been fetched by client.
+    pub fetched: bool,
+    // Whether or not his message has been deleted by client.
     pub deleted: bool,
 }

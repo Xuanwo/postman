@@ -173,21 +173,6 @@ impl Listener {
 }
 
 impl Handler {
-    fn get(&self, key: usize) -> Result<MessageMeta> {
-        match self.db.get(key.to_be_bytes()) {
-            Err(e) => Err(anyhow::anyhow!("db: read {}: {}", key, e)),
-            Ok(v) => match v {
-                None => Err(anyhow::anyhow!("db: read {}: not found")),
-                Some(v) => Ok(bincode::deserialize(v.as_ref())?),
-            },
-        }
-    }
-    fn set(&self, key: usize, value: &MessageMeta) -> Result<()> {
-        self.db
-            .insert(key.to_be_bytes(), bincode::serialize(value)?.as_slice())?;
-
-        Ok(())
-    }
     async fn run(&mut self) -> crate::Result<()> {
         let (mut r, mut w) = self.connection.split();
 
@@ -208,7 +193,21 @@ impl Handler {
             let resp = match req {
                 Request::USER(v) => Response::USER("".to_string()),
                 Request::PASS(_) => Response::PASS("".to_string()),
-                Request::STAT => Response::STAT { count: 10, size: 8 },
+                Request::STAT => {
+                    let (mut count, mut size) = (0, 0);
+
+                    for v in self.db.iter() {
+                        if let Ok(v) = v {
+                            count += 1;
+                            size += MessageMeta::from(v.1).size
+                        }
+                    }
+
+                    Response::STAT {
+                        count,
+                        size: size * 8,
+                    }
+                }
                 Request::UIDL(_) => unimplemented!(),
                 Request::LIST(_) => unimplemented!(),
                 Request::RETR(_) => unimplemented!(),

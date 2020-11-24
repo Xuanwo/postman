@@ -1235,7 +1235,10 @@ impl Response {
                             ));
                         }
 
-                        Response::LIST(ListResponse::Single(usize::from_str(vs[1])?, usize::from_str(vs[2])? / 8))
+                        Response::LIST(ListResponse::Single(
+                            usize::from_str(vs[1])?,
+                            usize::from_str(vs[2])? / 8,
+                        ))
                     }
                 },
                 _ => {
@@ -1345,8 +1348,31 @@ pub struct MessageMeta {
     pub id: usize,
     pub uid: String,
     pub size: usize,
+    pub path: String,
     pub status: MessageStatus,
-    pub next_status: Option<MessageStatus>,
+    next_status: Option<MessageStatus>,
+}
+
+impl MessageMeta {
+    pub fn is_fetched(&self) -> bool {
+        match self.next_status {
+            None => self.status.fetched,
+            Some(v) => v.fetched,
+        }
+    }
+    pub fn is_deleted(&self) -> bool {
+        match self.next_status {
+            None => self.status.deleted,
+            Some(v) => v.deleted,
+        }
+    }
+
+    pub fn set_fetched(&mut self) {
+        self.next_status.unwrap_or(MessageStatus::default()).fetched = true
+    }
+    pub fn set_deleted(&mut self) {
+        self.next_status.unwrap_or(MessageStatus::default()).deleted = true
+    }
 }
 
 impl From<sled::IVec> for MessageMeta {

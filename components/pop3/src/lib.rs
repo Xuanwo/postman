@@ -31,6 +31,7 @@
 use std::borrow::BorrowMut;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter, Write};
+use std::fs::read_to_string;
 use std::future::Future;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -261,11 +262,45 @@ impl Handler {
                         }
                     }
                 },
-                Request::RETR(_) => unimplemented!(),
-                Request::DELE(_) => unimplemented!(),
-                Request::NOOP => unimplemented!(),
-                Request::RSET => unimplemented!(),
-                Request::QUIT => unimplemented!(),
+                Request::RETR(key) => {
+                    let v = self.db.get(key.to_be_bytes())?;
+                    match v {
+                        None => Response::ERR("no such message".to_string()),
+                        Some(v) => {
+                            let mut msg = MessageMeta::from(v);
+
+                            let content = read_to_string(&msg.path)?;
+
+                            msg.set_fetched();
+                            self.db.insert(key.to_be_bytes(), msg)?;
+
+                            Response::RETR(content)
+                        }
+                    }
+                }
+                Request::DELE(key) => {
+                    let v = self.db.get(key.to_be_bytes())?;
+                    match v {
+                        None => Response::ERR("no such message".to_string()),
+                        Some(v) => {
+                            let mut msg = MessageMeta::from(v);
+
+                            msg.set_deleted();
+                            self.db.insert(key.to_be_bytes(), msg)?;
+
+                            Response::DELE
+                        }
+                    }
+                }
+                Request::NOOP => Response::NOOP,
+                Request::RSET => {
+                    // TODO: we need to clean all messages' next_status.
+                    Response::RSET
+                }
+                Request::QUIT => {
+                    // TODO: we need to update all messages' status.
+                    Response::QUIT
+                }
                 Request::AUTH(v) => match v {
                     None => Response::AUTH(AuthResponse::All(Vec::new())),
                     Some(auth) => unimplemented!(),
@@ -335,6 +370,6 @@ mod test {
             listener,
             signal::ctrl_c(),
         )
-            .await
+        .await
     }
 }

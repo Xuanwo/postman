@@ -1012,7 +1012,7 @@ pub enum Response {
     STAT { count: usize, size: usize },
     RSET,
     TOP(String),
-    UIDL(BTreeMap<usize, String>),
+    UIDL(UidlResponse),
     USER(String),
 
     ERR(String),
@@ -1025,6 +1025,12 @@ pub enum ListResponse {
         count: usize,
         messages: Vec<MessageMeta>,
     },
+}
+
+#[derive(Debug)]
+pub enum UidlResponse {
+    Single(usize, String),
+    All(BTreeMap<usize, String>),
 }
 
 #[derive(Debug)]
@@ -1075,13 +1081,18 @@ impl Response {
                 ListResponse::Single(v) => write!(&mut f, "+OK {} {}\r\n", v.id, v.size)?,
             },
             Response::STAT { count, size } => write!(&mut f, "+OK {} {}\r\n", count, size)?,
-            Response::UIDL(v) => {
-                write!(&mut f, "+OK {} mails\r\n", v.len())?;
-                for (id, uid) in v.iter() {
-                    write!(&mut f, "{} {}\r\n", id, uid)?;
+            Response::UIDL(v) => match v {
+                UidlResponse::Single(id, uid) => {
+                    write!(&mut f, "+OK {} {}\r\n", id, uid)?;
                 }
-                write!(&mut f, ".\r\n")?
-            }
+                UidlResponse::All(v) => {
+                    write!(&mut f, "+OK {} mails\r\n", v.len())?;
+                    for (id, uid) in v.iter() {
+                        write!(&mut f, "{} {}\r\n", id, uid)?;
+                    }
+                    write!(&mut f, ".\r\n")?
+                }
+            },
 
             Response::ERR(v) => write!(&mut f, "-ERR {}\r\n", v)?,
         }
@@ -1139,23 +1150,58 @@ impl Response {
                     size: usize::from_str(vs[2])?,
                 }
             }
-            Command::UIDL => {
-                if vs.len() < 2 {
+            Command::UIDL => match req {
+                Request::UIDL(v) => match v {
+                    None => {
+                        if vs.len() < 2 {
+                            return Err(anyhow::anyhow!(
+                                "invalid response for {}: {}",
+                                cmd,
+                                content
+                            ));
+                        }
+
+                        let mut m = BTreeMap::new();
+                        for v in vs[1..vs.len() - 1].iter() {
+                            let ids: Vec<&str> = v.splitn(2, " ").collect();
+                            if ids.len() != 2 {
+                                return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, v));
+                            }
+
+                            m.insert(usize::from_str(ids[0])?, ids[1].to_string());
+                        }
+
+                        Response::UIDL(UidlResponse::All(m))
+                    }
+                    Some(v) => {
+                        if vs.len() != 1 {
+                            return Err(anyhow::anyhow!(
+                                "invalid response for {}: {}",
+                                cmd,
+                                content
+                            ));
+                        }
+
+                        let vs: Vec<&str> = vs[0].split(" ").collect();
+
+                        if vs.len() != 3 {
+                            return Err(anyhow::anyhow!(
+                                "invalid response for {}: {}",
+                                cmd,
+                                content
+                            ));
+                        }
+
+                        Response::UIDL(UidlResponse::Single(
+                            usize::from_str(vs[1])?,
+                            String::from(vs[2]),
+                        ))
+                    }
+                },
+                _ => {
                     return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, content));
                 }
-
-                let mut m = BTreeMap::new();
-                for v in vs[1..vs.len() - 1].iter() {
-                    let ids: Vec<&str> = v.splitn(2, " ").collect();
-                    if ids.len() != 2 {
-                        return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, v));
-                    }
-
-                    m.insert(usize::from_str(ids[0])?, ids[1].to_string());
-                }
-
-                Response::UIDL(m)
-            }
+            },
             Command::LIST => match req {
                 Request::LIST(v) => match v {
                     None => {
@@ -1176,6 +1222,7 @@ impl Response {
 
                             messages.push(MessageMeta {
                                 id: usize::from_str(ids[0])?,
+                                uid: "".to_string(),
                                 size: usize::from_str(ids[1])?,
                                 status: MessageStatus::default(),
                                 next_status: None,
@@ -1198,6 +1245,7 @@ impl Response {
 
                         Response::LIST(ListResponse::Single(MessageMeta {
                             id: usize::from_str(vs[1])?,
+                            uid: "".to_string(),
                             size: usize::from_str(vs[2])?,
                             status: MessageStatus::default(),
                             next_status: None,
@@ -1306,9 +1354,10 @@ enum State {
 /// - `next_status` is Some means the message's status has been updated, `status` could
 ///   be replace be `next_status` is user send `QUIT` or dropped if user close the
 ///   connection or send `REST`
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessageMeta {
     pub id: usize,
+    pub uid: String,
     pub size: usize,
     pub status: MessageStatus,
     pub next_status: Option<MessageStatus>,

@@ -29,6 +29,7 @@
 /// C:  <close connection>
 /// S:  <wait for next connection>
 use std::borrow::BorrowMut;
+use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter, Write};
 use std::future::Future;
 use std::str::FromStr;
@@ -36,6 +37,7 @@ use std::sync::Arc;
 
 use anyhow::{Error, Result};
 use log::{debug, error, info, warn};
+use sled::IVec;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, ReadHalf, WriteHalf};
 use tokio::net::tcp::OwnedReadHalf;
 use tokio::net::{TcpListener, TcpStream};
@@ -44,7 +46,6 @@ use tokio::time::{self, Duration};
 
 use crate::shutdown::Shutdown;
 pub use proto::*;
-use sled::IVec;
 
 mod proto;
 mod shutdown;
@@ -208,7 +209,32 @@ impl Handler {
                         size: size * 8,
                     }
                 }
-                Request::UIDL(_) => unimplemented!(),
+                Request::UIDL(v) => match v {
+                    None => {
+                        let mut m = BTreeMap::new();
+
+                        for v in self.db.iter() {
+                            if let Ok(v) = v {
+                                let msg = MessageMeta::from(v.1);
+
+                                m.insert(msg.id, msg.uid);
+                            }
+                        }
+
+                        Response::UIDL(UidlResponse::All(m))
+                    }
+                    Some(v) => {
+                        let v = self.db.get(v.to_be_bytes())?;
+                        match v {
+                            None => Response::ERR("no such message".to_string()),
+                            Some(v) => {
+                                let msg = MessageMeta::from(v);
+
+                                Response::UIDL(UidlResponse::Single(msg.id, msg.uid))
+                            }
+                        }
+                    }
+                },
                 Request::LIST(_) => unimplemented!(),
                 Request::RETR(_) => unimplemented!(),
                 Request::DELE(_) => unimplemented!(),

@@ -1018,15 +1018,16 @@ pub enum Response {
     ERR(String),
 }
 
+/// The first is message id.
+/// The second is message size in bytes.
 #[derive(Debug)]
 pub enum ListResponse {
-    Single(MessageMeta),
-    All {
-        count: usize,
-        messages: Vec<MessageMeta>,
-    },
+    Single(usize, usize),
+    All(Vec<(usize, usize)>),
 }
 
+/// The first is message id.
+/// The second is message unique id.
 #[derive(Debug)]
 pub enum UidlResponse {
     Single(usize, String),
@@ -1071,14 +1072,14 @@ impl Response {
                 write!(&mut f, ".\r\n")?
             }
             Response::LIST(v) => match v {
-                ListResponse::All { count, messages } => {
-                    write!(&mut f, "+OK {} messages\r\n", count)?;
+                ListResponse::All(messages) => {
+                    write!(&mut f, "+OK {} messages\r\n", messages.len())?;
                     for v in messages.iter() {
-                        write!(&mut f, "{} {}\r\n", v.id, v.size)?;
+                        write!(&mut f, "{} {}\r\n", v.0, v.1)?;
                     }
                     write!(&mut f, ".\r\n")?
                 }
-                ListResponse::Single(v) => write!(&mut f, "+OK {} {}\r\n", v.id, v.size)?,
+                ListResponse::Single(id, size) => write!(&mut f, "+OK {} {}\r\n", id, size * 8)?,
             },
             Response::STAT { count, size } => write!(&mut f, "+OK {} {}\r\n", count, size)?,
             Response::UIDL(v) => match v {
@@ -1220,19 +1221,10 @@ impl Response {
                                 return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, v));
                             }
 
-                            messages.push(MessageMeta {
-                                id: usize::from_str(ids[0])?,
-                                uid: "".to_string(),
-                                size: usize::from_str(ids[1])?,
-                                status: MessageStatus::default(),
-                                next_status: None,
-                            });
+                            messages.push((usize::from_str(ids[0])?, usize::from_str(ids[1])? / 8));
                         }
 
-                        Response::LIST(ListResponse::All {
-                            count: messages.len(),
-                            messages,
-                        })
+                        Response::LIST(ListResponse::All(messages))
                     }
                     Some(_) => {
                         if vs.len() != 3 {
@@ -1243,13 +1235,7 @@ impl Response {
                             ));
                         }
 
-                        Response::LIST(ListResponse::Single(MessageMeta {
-                            id: usize::from_str(vs[1])?,
-                            uid: "".to_string(),
-                            size: usize::from_str(vs[2])?,
-                            status: MessageStatus::default(),
-                            next_status: None,
-                        }))
+                        Response::LIST(ListResponse::Single(usize::from_str(vs[1])?, usize::from_str(vs[2])? / 8))
                     }
                 },
                 _ => {

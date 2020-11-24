@@ -235,7 +235,32 @@ impl Handler {
                         }
                     }
                 },
-                Request::LIST(_) => unimplemented!(),
+                Request::LIST(v) => match v {
+                    None => {
+                        let mut m = Vec::new();
+
+                        for v in self.db.iter() {
+                            if let Ok(v) = v {
+                                let msg = MessageMeta::from(v.1);
+
+                                m.push((msg.id, msg.size));
+                            }
+                        }
+
+                        Response::LIST(ListResponse::All(m))
+                    }
+                    Some(v) => {
+                        let v = self.db.get(v.to_be_bytes())?;
+                        match v {
+                            None => Response::ERR("no such message".to_string()),
+                            Some(v) => {
+                                let msg = MessageMeta::from(v);
+
+                                Response::LIST(ListResponse::Single(msg.id, msg.size))
+                            }
+                        }
+                    }
+                },
                 Request::RETR(_) => unimplemented!(),
                 Request::DELE(_) => unimplemented!(),
                 Request::NOOP => unimplemented!(),
@@ -310,6 +335,6 @@ mod test {
             listener,
             signal::ctrl_c(),
         )
-        .await
+            .await
     }
 }

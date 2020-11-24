@@ -786,7 +786,6 @@ impl From<&Request> for Command {
             Request::TOP { .. } => Command::TOP,
             Request::UIDL(_) => Command::UIDL,
             Request::USER(_) => Command::USER,
-            _ => panic!("invalid command for request: {:?}", v),
         }
     }
 }
@@ -830,10 +829,52 @@ pub enum Request {
 }
 
 impl Request {
-    pub fn from_str(v: &str) -> Result<Request> {
+    pub fn to_string(&self) -> Result<String> {
+        let mut f = String::new();
+
+        match self {
+            Request::CAPA | Request::NOOP | Request::QUIT | Request::RSET | Request::STAT => {
+                write!(&mut f, "{}\r\n", Command::from(self))?
+            }
+            Request::DELE(v) => write!(&mut f, "{} {}\r\n", Command::from(self), v)?,
+            Request::PASS(v) => write!(&mut f, "{} {}\r\n", Command::from(self), v)?,
+            Request::RETR(v) => write!(&mut f, "{} {}\r\n", Command::from(self), v)?,
+            Request::USER(v) => write!(&mut f, "{} {}\r\n", Command::from(self), v)?,
+            Request::AUTH(v) => match v {
+                None => write!(&mut f, "{}\r\n", Command::from(self))?,
+                Some(v) => write!(&mut f, "{} {}\r\n", Command::from(self), v)?,
+            },
+            Request::LIST(v) => match v {
+                None => write!(&mut f, "{}\r\n", Command::from(self))?,
+                Some(v) => write!(&mut f, "{} {}\r\n", Command::from(self), v)?,
+            },
+            Request::UIDL(v) => match v {
+                None => write!(&mut f, "{}\r\n", Command::from(self))?,
+                Some(v) => write!(&mut f, "{} {}\r\n", Command::from(self), v)?,
+            },
+            Request::APOP { username, digest } => write!(
+                &mut f,
+                "{} {} {}\r\n",
+                Command::from(self),
+                username,
+                digest
+            )?,
+            Request::TOP { id, lines } => {
+                write!(&mut f, "{} {} {}\r\n", Command::from(self), id, lines)?
+            }
+        }
+
+        Ok(f)
+    }
+}
+
+impl FromStr for Request {
+    type Err = anyhow::Error;
+
+    fn from_str(v: &str) -> Result<Self> {
         let v = v.strip_suffix("\r\n").unwrap();
 
-        let vs: Vec<&str> = v.split(" ").filter(|s| !s.is_empty()).collect();
+        let vs: Vec<&str> = v.split(' ').filter(|s| !s.is_empty()).collect();
         let cmd = Command::from_str(vs[0])?;
 
         let req = match cmd {
@@ -956,44 +997,6 @@ impl Request {
         };
 
         Ok(req)
-    }
-
-    pub fn to_string(&self) -> Result<String> {
-        let mut f = String::new();
-
-        match self {
-            Request::CAPA | Request::NOOP | Request::QUIT | Request::RSET | Request::STAT => {
-                write!(&mut f, "{}\r\n", Command::from(self))?
-            }
-            Request::DELE(v) => write!(&mut f, "{} {}\r\n", Command::from(self), v)?,
-            Request::PASS(v) => write!(&mut f, "{} {}\r\n", Command::from(self), v)?,
-            Request::RETR(v) => write!(&mut f, "{} {}\r\n", Command::from(self), v)?,
-            Request::USER(v) => write!(&mut f, "{} {}\r\n", Command::from(self), v)?,
-            Request::AUTH(v) => match v {
-                None => write!(&mut f, "{}\r\n", Command::from(self))?,
-                Some(v) => write!(&mut f, "{} {}\r\n", Command::from(self), v)?,
-            },
-            Request::LIST(v) => match v {
-                None => write!(&mut f, "{}\r\n", Command::from(self))?,
-                Some(v) => write!(&mut f, "{} {}\r\n", Command::from(self), v)?,
-            },
-            Request::UIDL(v) => match v {
-                None => write!(&mut f, "{}\r\n", Command::from(self))?,
-                Some(v) => write!(&mut f, "{} {}\r\n", Command::from(self), v)?,
-            },
-            Request::APOP { username, digest } => write!(
-                &mut f,
-                "{} {} {}\r\n",
-                Command::from(self),
-                username,
-                digest
-            )?,
-            Request::TOP { id, lines } => {
-                write!(&mut f, "{} {} {}\r\n", Command::from(self), id, lines)?
-            }
-        }
-
-        Ok(f)
     }
 }
 
@@ -1140,7 +1143,7 @@ impl Response {
                     return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, content));
                 }
 
-                let vs: Vec<&str> = vs[0].split(" ").collect();
+                let vs: Vec<&str> = vs[0].split(' ').collect();
 
                 if vs.len() != 3 {
                     return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, content));
@@ -1164,7 +1167,7 @@ impl Response {
 
                         let mut m = BTreeMap::new();
                         for v in vs[1..vs.len() - 1].iter() {
-                            let ids: Vec<&str> = v.splitn(2, " ").collect();
+                            let ids: Vec<&str> = v.splitn(2, ' ').collect();
                             if ids.len() != 2 {
                                 return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, v));
                             }
@@ -1174,7 +1177,7 @@ impl Response {
 
                         Response::UIDL(UidlResponse::All(m))
                     }
-                    Some(v) => {
+                    Some(_) => {
                         if vs.len() != 1 {
                             return Err(anyhow::anyhow!(
                                 "invalid response for {}: {}",
@@ -1183,7 +1186,7 @@ impl Response {
                             ));
                         }
 
-                        let vs: Vec<&str> = vs[0].split(" ").collect();
+                        let vs: Vec<&str> = vs[0].split(' ').collect();
 
                         if vs.len() != 3 {
                             return Err(anyhow::anyhow!(
@@ -1216,7 +1219,7 @@ impl Response {
                         let mut messages = Vec::new();
 
                         for v in vs[1..vs.len() - 1].iter() {
-                            let ids: Vec<&str> = v.splitn(2, " ").collect();
+                            let ids: Vec<&str> = v.splitn(2, ' ').collect();
                             if ids.len() != 2 {
                                 return Err(anyhow::anyhow!("invalid response for {}: {}", cmd, v));
                             }
@@ -1320,7 +1323,8 @@ impl Response {
     }
 }
 
-enum State {
+#[derive(Debug, Copy, Clone)]
+pub enum State {
     AUTHORIZATION,
     TRANSACTION,
     /// When the client issues the QUIT command from the TRANSACTION state,
@@ -1368,10 +1372,10 @@ impl MessageMeta {
     }
 
     pub fn set_fetched(&mut self) {
-        self.next_status.unwrap_or(MessageStatus::default()).fetched = true
+        self.next_status.unwrap_or_default().fetched = true
     }
     pub fn set_deleted(&mut self) {
-        self.next_status.unwrap_or(MessageStatus::default()).deleted = true
+        self.next_status.unwrap_or_default().deleted = true
     }
 }
 

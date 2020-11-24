@@ -1,8 +1,9 @@
+use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter, Write};
 use std::str::FromStr;
 
 use anyhow::Result;
-use std::collections::BTreeMap;
+use serde::{Deserialize, Serialize};
 
 #[derive(Copy, Clone, Debug)]
 pub enum Command {
@@ -723,7 +724,7 @@ pub enum Command {
 impl FromStr for Command {
     type Err = anyhow::Error;
 
-    fn from_str(s: &str) -> anyhow::Result<Self> {
+    fn from_str(s: &str) -> Result<Self> {
         Ok(match s {
             "USER" => Command::USER,
             "PASS" => Command::PASS,
@@ -1175,6 +1176,8 @@ impl Response {
                             messages.push(MessageMeta {
                                 id: usize::from_str(ids[0])?,
                                 size: usize::from_str(ids[1])?,
+                                status: MessageStatus::default(),
+                                next_status: None,
                             });
                         }
 
@@ -1195,6 +1198,8 @@ impl Response {
                         Response::LIST(ListResponse::Single(MessageMeta {
                             id: usize::from_str(vs[1])?,
                             size: usize::from_str(vs[2])?,
+                            status: MessageStatus::default(),
+                            next_status: None,
                         }))
                     }
                 },
@@ -1291,8 +1296,25 @@ enum State {
     UPDATE,
 }
 
-#[derive(Debug, Copy, Clone)]
+/// MessageMeta stores related message metadata.
+///
+/// `status` is the message's current committed status
+/// `next_status` is the message's not committed status
+///
+/// - `next_status` is None means the message's status is up to date.
+/// - `next_status` is Some means the message's status has been updated, `status` could
+///   be replace be `next_status` is user send `QUIT` or dropped if user close the
+///   connection or send `REST`
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct MessageMeta {
     pub id: usize,
     pub size: usize,
+    pub status: MessageStatus,
+    pub next_status: Option<MessageStatus>,
+}
+
+#[derive(Debug, Copy, Clone, Default, Serialize, Deserialize)]
+pub struct MessageStatus {
+    pub read: bool,
+    pub deleted: bool,
 }

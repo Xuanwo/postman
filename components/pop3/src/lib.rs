@@ -44,6 +44,7 @@ use tokio::time::{self, Duration};
 
 use crate::shutdown::Shutdown;
 pub use proto::*;
+use sled::IVec;
 
 mod proto;
 mod shutdown;
@@ -52,6 +53,8 @@ const MAX_CONNECTIONS: usize = 1024;
 
 #[derive(Debug)]
 struct Listener {
+    db: sled::Db,
+
     listener: TcpListener,
     limit_connections: Arc<Semaphore>,
     notify_shutdown: broadcast::Sender<()>,
@@ -61,18 +64,23 @@ struct Listener {
 
 #[derive(Debug)]
 struct Handler {
+    db: sled::Db,
+
     connection: TcpStream,
-
     limit_connections: Arc<Semaphore>,
-
     shutdown: Shutdown,
 }
 
-pub async fn run(listener: TcpListener, shutdown: impl Future) -> crate::Result<()> {
+pub async fn run(
+    path: &std::path::Path,
+    listener: TcpListener,
+    shutdown: impl Future,
+) -> Result<()> {
     let (notify_shutdown, _) = broadcast::channel(1);
     let (shutdown_complete_tx, shutdown_complete_rx) = mpsc::channel(1);
 
     let mut server = Listener {
+        db: sled::open(path)?,
         listener,
         limit_connections: Arc::new(Semaphore::new(MAX_CONNECTIONS)),
         notify_shutdown,
@@ -117,6 +125,7 @@ impl Listener {
 
             let mut handler = Handler {
                 connection: socket,
+                db: self.db.clone(),
 
                 // The connection state needs a handle to the max connections
                 // semaphore. When the handler is done processing the
@@ -164,6 +173,21 @@ impl Listener {
 }
 
 impl Handler {
+    fn get(&self, key: usize) -> Result<MessageMeta> {
+        match self.db.get(key.to_be_bytes()) {
+            Err(e) => Err(anyhow::anyhow!("db: read {}: {}", key, e)),
+            Ok(v) => match v {
+                None => Err(anyhow::anyhow!("db: read {}: not found")),
+                Some(v) => Ok(bincode::deserialize(v.as_ref())?),
+            },
+        }
+    }
+    fn set(&self, key: usize, value: &MessageMeta) -> Result<()> {
+        self.db
+            .insert(key.to_be_bytes(), bincode::serialize(value)?.as_slice())?;
+
+        Ok(())
+    }
     async fn run(&mut self) -> crate::Result<()> {
         let (mut r, mut w) = self.connection.split();
 
@@ -241,6 +265,8 @@ async fn read_line(mut src: impl AsyncBufReadExt + Unpin) -> Result<String> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::path::{Path, PathBuf};
+    use std::str::FromStr;
     use tokio::net::TcpListener;
     use tokio::signal;
 
@@ -248,11 +274,17 @@ mod test {
     async fn debug_run() -> Result<()> {
         let mut log_builder = env_logger::Builder::new();
         log_builder.filter_level(log::LevelFilter::Debug);
+        log_builder.filter_module("sled", log::LevelFilter::Error);
         log_builder.parse_default_env();
         log_builder.init();
 
         let listener = TcpListener::bind(&format!("127.0.0.1:{}", 8080)).await?;
 
-        run(listener, signal::ctrl_c()).await
+        run(
+            PathBuf::from_str("/tmp/data")?.as_path(),
+            listener,
+            signal::ctrl_c(),
+        )
+        .await
     }
 }
